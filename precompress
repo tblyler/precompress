@@ -20,6 +20,7 @@ case "${1:-}" in
  Primarily used for Caddy's file_sever directive's precompresed option.
  It will compress every non brotli, zstandard, or gzip file.
 EOF
+		exit 0
 		;;
 esac
 
