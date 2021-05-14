@@ -44,6 +44,7 @@ readonly REQUIRED_APPS=(
 	'cat'
 	'nproc'
 	'pigz'
+	'sha256sum'
 	'tr'
 	'xargs'
 	'zstd'
@@ -67,9 +68,26 @@ errTrap() {
 
 trap errTrap ERR
 
-zstd -k -T0 --ultra -20 "${FILE_NAME}" &> /dev/null &
-pigz -k -9 "${FILE_NAME}" &> /dev/null &
-brotli -k -9 "${FILE_NAME}" &> /dev/null &
+FILE_SHA256="$(sha256sum < "${FILE_NAME}")"
+readonly FILE_SHA256
+
+if ! [ -e "${FILE_NAME}.zst" ] || [ "${FILE_SHA256}" != "$(zstd -d -c "${FILE_NAME}.zst" | sha256sum)" ]; then
+	echo "$FILE_NAME"
+	rm -f "${FILE_NAME}.zst"
+	zstd -k -T0 --ultra -20 "${FILE_NAME}" &> /dev/null &
+fi
+
+if ! [ -e "${FILE_NAME}.gz" ] || [ "${FILE_SHA256}" != "$(gzip -d -c "${FILE_NAME}.gz" | sha256sum)" ]; then
+	echo "$FILE_NAME"
+	rm -f "${FILE_NAME}.gz"
+	pigz -k -9 "${FILE_NAME}" &> /dev/null &
+fi
+
+if ! [ -e "${FILE_NAME}.br" ] || [ "${FILE_SHA256}" != "$(brotli -d -c "${FILE_NAME}.br" | sha256sum)" ]; then
+	echo "$FILE_NAME"
+	rm -f "${FILE_NAME}.br"
+	brotli -k -9 "${FILE_NAME}" &> /dev/null &
+fi
 
 wait
 EOF
