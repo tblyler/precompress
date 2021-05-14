@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly SCAN_PATH="${1:-.}"
+
+case "${1:-}" in
+	'-h' | '--help' | 'help')
+		cat << 'EOF'
+ precompress
+ ===========
+
+ Usage
+ -----
+
+ precompress [path]
+
+ If path is omitted, it used the current working directory.
+
+ Primarily used for Caddy's file_sever directive's precompresed option.
+ It will compress every non brotli, zstandard, or gzip file.
+EOF
+		;;
+esac
+
+if [ "${SCAN_PATH}" = "." ] && [ -t 0 ] && [ -t 1 ] && [ -t 2 ]; then
+	while read -r -p "About to compress all of ${PWD}, continue? [y/n] " ANSWER; do
+		case "${ANSWER}" in
+			'y')
+				break
+				;;
+
+			'n')
+				exit 1
+				;;
+		esac
+	done
+fi
+
+readonly REQUIRED_APPS=(
+	'ag'
+	'brotli'
+	'cat'
+	'nproc'
+	'pigz'
+	'tr'
+	'xargs'
+	'zstd'
+)
+
+for REQUIRED_APP in "${REQUIRED_APPS[@]}"; do
+	if ! command -v "${REQUIRED_APP}" &> /dev/null; then
+		>&2 echo "missing ${REQUIRED_APP} from PATH"
+		exit 1
+	fi
+done
+
+COMPRESS_SCRIPT="$(cat << 'EOF'
+set -euo pipefail
+
+readonly FILE_NAME="$0"
+
+errTrap() {
+	>&2 echo "failed to compress $FILE_NAME"
+}
+
+trap errTrap ERR
+
+zstd -k -T0 --ultra -20 "${FILE_NAME}" &> /dev/null &
+pigz -k -9 "${FILE_NAME}" &> /dev/null &
+brotli -k -9 "${FILE_NAME}" &> /dev/null &
+
+wait
+EOF
+)"
+readonly COMPRESS_SCRIPT
+
+ag --nocolor --ignore '*.gz' --ignore '*.zst' --ignore '*.br' -g '' -l "${SCAN_PATH}" |
+	tr '\n' '\0' |
+	xargs -0 -r -n 1 -P "$(nproc)" "$(command -v bash)" -c "${COMPRESS_SCRIPT}"
