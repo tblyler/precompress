@@ -39,13 +39,12 @@ if [ "${SCAN_PATH}" = "." ] && [ -t 0 ] && [ -t 1 ] && [ -t 2 ]; then
 fi
 
 readonly REQUIRED_APPS=(
-	'ag'
 	'brotli'
 	'cat'
+	'find'
 	'nproc'
 	'pigz'
 	'sha256sum'
-	'tr'
 	'xargs'
 	'zstd'
 )
@@ -77,7 +76,7 @@ if ! [ -e "${FILE_NAME}.zst" ] || [ "${FILE_SHA256}" != "$(zstd -d -c "${FILE_NA
 	zstd -k -T0 --ultra -20 "${FILE_NAME}" &> /dev/null &
 fi
 
-if ! [ -e "${FILE_NAME}.gz" ] || [ "${FILE_SHA256}" != "$(gzip -d -c "${FILE_NAME}.gz" | sha256sum)" ]; then
+if ! [ -e "${FILE_NAME}.gz" ] || [ "${FILE_SHA256}" != "$(pigz -d -c "${FILE_NAME}.gz" | sha256sum)" ]; then
 	echo "gzip: $FILE_NAME"
 	rm -f "${FILE_NAME}.gz"
 	pigz -k -9 "${FILE_NAME}" &> /dev/null &
@@ -94,6 +93,17 @@ EOF
 )"
 readonly COMPRESS_SCRIPT
 
-ag --nocolor --ignore '*.gz' --ignore '*.zst' --ignore '*.br' -g '' -l "${SCAN_PATH}" |
-	tr '\n' '\0' |
+find "${SCAN_PATH}" -type f \
+	-not -iname '*.gz' \
+	-not -iname '*.zst' \
+	-not -iname '*.br' \
+	-not -iname '*.jpg' \
+	-not -iname '*.jpeg' \
+	-not -iname '*.png' \
+	-not -iname '*.gif' \
+	-not -iname '*.pdf' \
+	-not -iname '*.mp4' \
+	-not -iname '*.mp3' \
+	-not -iname '*.docx' \
+	-print0 |
 	xargs -0 -r -n 1 -P "$(nproc)" "$(command -v bash)" -c "${COMPRESS_SCRIPT}"
